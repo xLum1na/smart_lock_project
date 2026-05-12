@@ -48,10 +48,10 @@ uint8_t bsp_camera_init(void)
         .pixel_format = PIXFORMAT_JPEG, //YUV422,GRAYSCALE,RGB565,JPEG
         .frame_size = FRAMESIZE_HVGA,    //QQVGA-UXGA, For ESP32, do not use sizes above QVGA when not JPEG. The performance of the ESP32-S series has improved a lot, but JPEG mode always gives better frame rates.
 
-        .jpeg_quality = 12, //0-63, for OV series camera sensors, lower number means higher quality
-        .fb_count = 1,       //When jpeg mode is used, if fb_count more than one, the driver will work in continuous mode.
+        .jpeg_quality = 10, //0-63, for OV series camera sensors, lower number means higher quality
+        .fb_count = 2,       //When jpeg mode is used, if fb_count more than one, the driver will work in continuous mode.
         .fb_location = CAMERA_FB_IN_PSRAM,
-        .grab_mode = CAMERA_GRAB_WHEN_EMPTY,
+        .grab_mode = CAMERA_GRAB_LATEST,
     };
     ESP_ERROR_CHECK(esp_camera_init(&camera_cfg));
     ESP_LOGI(TAG, "BSP camera init success!");

@@ -12,7 +12,7 @@
  */
 
 
-#include "bsp.h"
+#include "bsp_esp32s3.h"
 #include "bsp_config.h"
 
 #include "bsp_ledc.h"
@@ -23,8 +23,8 @@
 #include "freertos/FreeRTOS.h"
 #include "bsp_camera.h"
 #include "esp_log.h"
+#include "bsp_microsd.h"
 
-SemaphoreHandle_t spi_mutex = NULL;
 
 void bsp_init(void)
 {
@@ -32,18 +32,25 @@ void bsp_init(void)
     ESP_LOGI("BSP", "Starting BSP initialization...");
     
     bsp_ledc_init();
+    vTaskDelay(pdMS_TO_TICKS(100));
     ESP_LOGI("BSP", "LEDC initialized");
     
     bsp_spi_bus_init();
+    vTaskDelay(pdMS_TO_TICKS(100));
     ESP_LOGI("BSP", "SPI bus initialized");
     
     bsp_lcd_init();  
+    vTaskDelay(pdMS_TO_TICKS(100));
     ESP_LOGI("BSP", "LCD initialized");
     // bsp_camera_init();
-    // bsp_touch_init();
-    bsp_fp_init();
+    vTaskDelay(pdMS_TO_TICKS(100));
+    bsp_touch_init();
+    vTaskDelay(pdMS_TO_TICKS(100));
+    // bsp_fp_init();
+    // vTaskDelay(pdMS_TO_TICKS(100));
 
-
+    // bsp_microsd_init();
+    vTaskDelay(pdMS_TO_TICKS(100));
     
 
 }

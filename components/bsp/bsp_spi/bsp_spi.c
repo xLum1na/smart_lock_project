@@ -24,7 +24,7 @@ static const char *TAG = "bsp_ledc";
 uint8_t bsp_spi_bus_init(void)
 {
     esp_err_t ret; 
-    const spi_bus_config_t bus_cfg = {
+    const spi_bus_config_t lcd_bus_cfg = {
         .mosi_io_num = BSP_SPI_MOSI_PIN,
         .miso_io_num = BSP_SPI_MISO_PIN,
         .sclk_io_num = BSP_SPI_SCLK_PIN,
@@ -32,11 +32,12 @@ uint8_t bsp_spi_bus_init(void)
         .quadhd_io_num = -1,
         .quadwp_io_num = -1,
     };
-    ret = spi_bus_initialize(BSP_SPI_HOST, &bus_cfg, BSP_SPI_DMA_CHAN);
+    ret = spi_bus_initialize(BSP_SPI_HOST, &lcd_bus_cfg, BSP_SPI_DMA_CHAN);
     if (ESP_OK != ret) {
         ESP_LOGE(TAG, "BSP spi bus init fail!!!");    
         return 0;
     }
+
     ESP_LOGI(TAG, "BSP spi bus init success!");
     return 1;
 }

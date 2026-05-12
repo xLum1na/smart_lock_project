@@ -1,203 +1,96 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
-#include "esp_lcd_panel_io.h"
-#include "esp_lcd_panel_ops.h"
-#include "esp_lcd_panel_vendor.h"
-#include "driver/gpio.h"
-#include "driver/spi_master.h"
-#include "bsp.h"
-#include "bsp_config.h"
+#include "esp_timer.h"
+#include "lvgl.h"
+#include "bsp_esp32s3.h"
 #include "bsp_lcd.h"
-#include "bsp_touch.h"
+#include "bsp_config.h"
 
-#include "esp_lcd_io_spi.h"
-#include "esp_lcd_touch.h"
-#include "bsp_xpt2046.h"
+static const char *TAG = "lvgl_v9_demo";
 
-#include "jpeg_decoder.h" // 引入JPEG解码库
-#include "esp_camera.h" // 引入摄像头库头文件
-#include "bsp_fp.h"
+// LCD 分辨率（使用 BSP 中的定义）
+#define LCD_HOR_RES   BSP_DISPLAY_WIDTH_PX
+#define LCD_VER_RES   BSP_DISPLAY_HIGHT_PX   // 注意：BSP 中原名如此
 
-#define TAG "app_main"
+// LVGL 时间基准回调函数（返回当前系统毫秒数）
+static uint32_t my_tick_get_cb(void)
+{
+    // 使用 esp_timer 获取微秒时间戳并转换为毫秒
+    return (uint32_t)(esp_timer_get_time() / 1000);
+}
 
-#define LCD_WIDTH 320
-#define LCD_HEIGHT 480
-#define CHUNK_WIDTH LCD_WIDTH // 320
-#define CHUNK_HEIGHT 40       // 每次传输40行
-
-// --- 修改块高度 ---
-#define LCD_WIDTH 320
-#define LCD_HEIGHT 480
-#define CHUNK_WIDTH LCD_WIDTH  // 320
-#define CHUNK_HEIGHT 3         // 每次传输3行
-
-// 辅助函数：旋转图像并分块显示
-void rotate_and_display_image(uint16_t *src_buffer, uint16_t src_width, uint16_t src_height) {
-    uint16_t tgt_width = LCD_WIDTH;  // 320
-    uint16_t tgt_height = LCD_HEIGHT; // 480
-    if(src_width != tgt_height || src_height != tgt_width) {
-         ESP_LOGE(TAG, "rotate_and_display_image: Source dimensions (%dx%d) do not match rotated target (%dx%d)", 
-                  src_width, src_height, tgt_width, tgt_height);
-         return;
-    }
-
-    uint16_t current_tgt_row_start = 0;
-    while (current_tgt_row_start < tgt_height) {
-        // 计算当前块的实际高度（最后一块可能不足CHUNK_HEIGHT）
-        uint16_t current_chunk_height = (tgt_height - current_tgt_row_start >= CHUNK_HEIGHT) ? 
-                                         CHUNK_HEIGHT : (tgt_height - current_tgt_row_start);
-
-        // 分配一个临时缓冲区来存储当前要绘制的块
-        size_t chunk_buf_size = CHUNK_WIDTH * current_chunk_height * sizeof(uint16_t);
-        uint16_t *temp_chunk_buffer = (uint16_t*)heap_caps_malloc(chunk_buf_size, MALLOC_CAP_SPIRAM);
-        if (!temp_chunk_buffer) {
-            ESP_LOGE(TAG, "Failed to allocate temporary chunk buffer of size %zu for row %d", chunk_buf_size, current_tgt_row_start);
-            return; // 或者尝试跳过此块
-        }
-
-        // --- 旋转并填充临时块缓冲区 ---
-        for (int tgt_y = current_tgt_row_start; tgt_y < current_tgt_row_start + current_chunk_height; tgt_y++) {
-            for (int tgt_x = 0; tgt_x < tgt_width; tgt_x++) {
-                // 旋转90度的映射关系 (tgt_x, tgt_y) <- (src_y, src_width - 1 - src_x)
-                int src_y = tgt_x; // tgt_x becomes src_y
-                int src_x = src_height - 1 - tgt_y; // tgt_y determines src_x, flipped
-                
-                uint32_t src_index = (uint32_t)src_y * src_width + src_x;
-                uint32_t tgt_chunk_index = (uint32_t)(tgt_y - current_tgt_row_start) * tgt_width + tgt_x;
-
-                temp_chunk_buffer[tgt_chunk_index] = src_buffer[src_index];
-            }
-        }
-
-        // --- 绘制临时块缓冲区到LCD ---
-        uint16_t x_start = 0;
-        uint16_t y_start = current_tgt_row_start;
-        uint16_t x_end = tgt_width - 1; // 319
-        uint16_t y_end = current_tgt_row_start + current_chunk_height - 1;
-
-        uint8_t draw_result = bsp_lcd_draw_bitmap(x_start, y_start, x_end, y_end, temp_chunk_buffer);
-        
-        if (draw_result != 0) {
-            ESP_LOGW(TAG, "LCD draw bitmap chunk failed (returned %d) at tgt_row %d, height %d", 
-                     draw_result, current_tgt_row_start, current_chunk_height);
-        } else {
-            ESP_LOGD(TAG, "Drawn rotated chunk at tgt_row %d, height: %d", current_tgt_row_start, current_chunk_height);
-        }
-
-        // 释放当前块的临时缓冲区
-        heap_caps_free(temp_chunk_buffer);
-
-        // 更新下一块的目标起始行
-        current_tgt_row_start += current_chunk_height;
-
-        // 可选：在块之间添加短暂延迟
-        // vTaskDelay(pdMS_TO_TICKS(1)); // 延迟1ms，可以根据需要调整
-    }
+// 显示刷新回调：将 LVGL 渲染的缓冲区数据写入 LCD
+static void my_flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t *px_buf)
+{
+    // 调用 BSP 的 LCD 绘制函数（参数为：起始/结束坐标，RGB565 数据指针）
+    bsp_lcd_draw_bitmap(area->x1, area->y1, area->x2 + 1, area->y2 + 1, (uint16_t *)px_buf);
     
-    ESP_LOGI(TAG, "Finished displaying all chunks.");
+    // 通知 LVGL 刷新完成
+    lv_display_flush_ready(disp);
 }
 
-void display_camera_image_on_lcd() {
-    camera_fb_t *fb = esp_camera_fb_get();
-    if (!fb) {
-        ESP_LOGE(TAG, "Failed to get camera frame");
-        return;
-    }
+void app_main(void)
+{
+    ESP_LOGI(TAG, "LVGL V9 demo starting...");
 
-    ESP_LOGI(TAG, "Got JPEG frame, size: %zu bytes, width: %d, height: %d", fb->len, fb->width, fb->height);
-
-    esp_jpeg_image_cfg_t jpeg_cfg = {
-        .indata = fb->buf,
-        .indata_size = fb->len,
-        .outbuf = NULL,
-        .outbuf_size = 0,
-        .out_format = JPEG_IMAGE_FORMAT_RGB565,
-        .out_scale = JPEG_IMAGE_SCALE_0,
-        .flags = {
-            .swap_color_bytes = 0
-        },
-        .advanced = {
-            .working_buffer = NULL,
-            .working_buffer_size = 0
-        }
-    };
-
-    esp_jpeg_image_output_t output_info;
-    esp_err_t err = esp_jpeg_get_image_info(&jpeg_cfg, &output_info);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to get JPEG image info (%s)", esp_err_to_name(err));
-        esp_camera_fb_return(fb);
-        return;
-    }
-
-    ESP_LOGI(TAG, "JPEG image info: Width=%d, Height=%d, Required output size=%zu bytes",
-             output_info.width, output_info.height, output_info.output_len);
-
-    // 检查图像尺寸是否是我们预期的（需要旋转的）尺寸: 480x320 -> 320x480
-    if (!(output_info.width == LCD_HEIGHT && output_info.height == LCD_WIDTH)) { 
-         ESP_LOGW(TAG, "Warning: Image dimensions (%dx%d) are not matching expected rotated source for %dx%d LCD. Logic assumes W=480, H=320.",
-                  output_info.width, output_info.height, LCD_WIDTH, LCD_HEIGHT);
-         esp_camera_fb_return(fb);
-         return;
-    }
-
-    size_t required_outbuf_size = output_info.output_len;
-    uint16_t *rgb565_buffer = (uint16_t*)heap_caps_malloc(required_outbuf_size, MALLOC_CAP_SPIRAM);
-    if (!rgb565_buffer) {
-        ESP_LOGE(TAG, "Failed to allocate RGB565 output buffer of size %zu", required_outbuf_size);
-        esp_camera_fb_return(fb);
-        return;
-    }
-
-    jpeg_cfg.outbuf = (uint8_t*)rgb565_buffer;
-    jpeg_cfg.outbuf_size = required_outbuf_size;
-
-    err = esp_jpeg_decode(&jpeg_cfg, &output_info);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "JPEG decode failed (%s)", esp_err_to_name(err));
-        heap_caps_free(rgb565_buffer);
-        esp_camera_fb_return(fb);
-        return;
-    }
-
-    ESP_LOGI(TAG, "JPEG decoded successfully. Actual output size: %zu bytes", output_info.output_len);
-
-    // 调用新的旋转和显示函数
-    rotate_and_display_image(rgb565_buffer, output_info.width, output_info.height);
-
-    ESP_LOGI(TAG, "Rotated image displayed on 320x480 LCD successfully with %dx%d chunks.", CHUNK_WIDTH, CHUNK_HEIGHT);
-
-    // 清理资源
-    heap_caps_free(rgb565_buffer);
-    esp_camera_fb_return(fb);
-}
-
-void app_main(void) {
-
+    // 1. 初始化 BSP（包括 LCD 等外设）
     bsp_init();
+    bsp_lcd_display_on_off(true);   // 开启 LCD 显示
+    bsp_lcd_set_backlight(100);     // 设置背光亮度（0-100）
+    bsp_lcd_mirror(true, true);
 
-    bsp_lcd_display_on_off(true);
-    bsp_lcd_set_backlight(100);
+    // 2. LVGL 核心初始化
+    lv_init();
 
-        // 先注册指纹
-    if (bsp_fp_add_finger(1)) {
-        ESP_LOGI(TAG, "Registration success. Now waiting for fingerprint matches...");
-    } else {
-        ESP_LOGE(TAG, "Registration failed.");
+    // 4. 设置 LVGL 时间基准（用于动画和超时）
+    lv_tick_set_cb(my_tick_get_cb);
+
+    // 5. 创建显示设备
+    lv_display_t *display = lv_display_create(LCD_HOR_RES, LCD_VER_RES);
+    if (!display) {
+        ESP_LOGE(TAG, "Display creation failed");
         return;
     }
-
-    // 注册成功后，无限循环等待指纹匹配
-    while (1) {
-        uint8_t ver_id;
-        if (bsp_fp_verify_finger(&ver_id, 0)) {
-            ESP_LOGI(TAG, "Finger matched! ID = %d", ver_id);
-            // 执行匹配成功后的动作，如开锁、点亮LED等
-        } else {
-            // 无匹配或超时，可以不做处理
+    ESP_LOGI(TAG, "1");
+    // 6. 分配显示缓冲区（部分刷新模式，1/10 屏幕高度，RGB565）
+    //    大小 = 宽度 × 行数 × 每像素字节数（2字节）
+    uint32_t buf_size = LCD_HOR_RES * (LCD_VER_RES / 10) * 2;
+    uint8_t *buf1 = heap_caps_malloc(buf_size, MALLOC_CAP_SPIRAM);
+    if (!buf1) {
+        ESP_LOGE(TAG, "Failed to allocate display buffer, fallback to internal RAM");
+        buf1 = malloc(buf_size);  // 尝试内部 RAM
+        if (!buf1) {
+            ESP_LOGE(TAG, "Display buffer allocation failed");
+            return;
         }
-        vTaskDelay(pdMS_TO_TICKS(50));
     }
+    uint8_t *buf2 = heap_caps_malloc(buf_size, MALLOC_CAP_SPIRAM);
+    if (!buf2) {
+        ESP_LOGE(TAG, "Failed to allocate display buffer, fallback to internal RAM");
+        buf2 = malloc(buf_size);  // 尝试内部 RAM
+        if (!buf2) {
+            ESP_LOGE(TAG, "Display buffer allocation failed");
+            return;
+        }
+    }
+    ESP_LOGI(TAG, "2");
+    lv_display_set_buffers(display, buf1, buf2, buf_size, 0);
+    lv_display_set_color_format(display, LV_COLOR_FORMAT_RGB565);
+    lv_display_set_flush_cb(display, my_flush_cb);
 
+    // 7. 创建简单 UI：居中标签
+    lv_obj_t *scr = lv_screen_active();
+    lv_obj_set_style_bg_color(scr, lv_color_hex(0x303030), 0);
+    
+    lv_obj_t *label = lv_label_create(scr);
+    lv_label_set_text(label, "Hello LVGL V9!\nESP32-S3");
+    lv_obj_set_style_text_color(label, lv_color_white(), 0);
+    lv_obj_align(label, LV_ALIGN_CENTER, 0, 0);
+    ESP_LOGI(TAG, "3");
+    // 8. 主循环：定期调用 LVGL 任务处理器
+    while (1) {
+        lv_timer_handler();          // 处理 LVGL 任务（重绘、动画等）
+        vTaskDelay(pdMS_TO_TICKS(15)); // 延时 5ms，让出 CPU
+    }
 }

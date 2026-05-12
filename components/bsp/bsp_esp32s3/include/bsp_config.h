@@ -101,7 +101,12 @@ extern "C" {
 #define BSP_FP_UART_RX_PIN  20
 #define BSP_FP_UART_TX_PIN  19
 
-#define BSP_FP_UART_RATE 9600
+#define BSP_FP_UART_RATE    9600
+
+/**
+ * @brief SD模块配置定义
+ */
+#define BSP_SD_CS_PIN       45
 
 
 #ifdef __cplusplus
