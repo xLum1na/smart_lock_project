@@ -45,8 +45,8 @@ uint8_t bsp_camera_init(void)
         .ledc_timer = BSP_CAMERA_LEDC_TIMER,
         .ledc_channel = BSP_CAMERA_LEDC_CHANNEL,
 
-        .pixel_format = PIXFORMAT_JPEG, //YUV422,GRAYSCALE,RGB565,JPEG
-        .frame_size = FRAMESIZE_HVGA,    //QQVGA-UXGA, For ESP32, do not use sizes above QVGA when not JPEG. The performance of the ESP32-S series has improved a lot, but JPEG mode always gives better frame rates.
+        .pixel_format = PIXFORMAT_RGB565,
+        .frame_size = FRAMESIZE_HVGA,    // 480×320 全屏
 
         .jpeg_quality = 10, //0-63, for OV series camera sensors, lower number means higher quality
         .fb_count = 2,       //When jpeg mode is used, if fb_count more than one, the driver will work in continuous mode.

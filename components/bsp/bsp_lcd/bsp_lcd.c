@@ -32,7 +32,7 @@ uint8_t bsp_lcd_init(void)
         .dc_gpio_num = BSP_DISPLAY_DC_PIN,
         .spi_mode   = BSP_DISPLAY_SPI_MODE,
         .pclk_hz    = BSP_DISPLAY_SPI_FREQ_HZ,
-        .trans_queue_depth = 10,
+        .trans_queue_depth = 1,   /* 同步: 阻塞到 DMA 完成, 防止 color_buffer 被覆盖 */
         .lcd_cmd_bits   = 8,
         .lcd_param_bits = 8,
     };
@@ -43,8 +43,7 @@ uint8_t bsp_lcd_init(void)
         .color_space    = ESP_LCD_COLOR_SPACE_BGR,
         .bits_per_pixel = 18,
     };
-
-    size_t buffer_size = BSP_DISPLAY_WIDTH_PX * 3 * 2;
+    size_t buffer_size = BSP_DISPLAY_WIDTH_PX * BSP_DISPLAY_HIGHT_PX;
     ESP_ERROR_CHECK(esp_lcd_new_panel_ili9488(io_handle, &dev_cfg, buffer_size, &lcd_handle));
 
     ESP_ERROR_CHECK(esp_lcd_panel_reset(lcd_handle));

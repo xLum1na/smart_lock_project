@@ -410,7 +410,7 @@ static esp_err_t esp_lcd_new_panel_ili9488_internal(
 
         // Allocate DMA buffer for color conversions
         ili9488->color_buffer =
-            (uint8_t *)heap_caps_malloc(buffer_size * 3, MALLOC_CAP_DMA);
+            (uint8_t *)heap_caps_malloc(buffer_size * 3, MALLOC_CAP_SPIRAM);
         ESP_GOTO_ON_FALSE(ili9488->color_buffer, ESP_ERR_NO_MEM, err, TAG,
                           "Failed to allocate DMA color conversion buffer");
     }

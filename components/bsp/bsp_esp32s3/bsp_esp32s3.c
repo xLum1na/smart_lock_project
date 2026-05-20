@@ -24,6 +24,7 @@
 #include "bsp_camera.h"
 #include "esp_log.h"
 #include "bsp_microsd.h"
+#include "bsp_servo.h"
 
 
 void bsp_init(void)
@@ -42,15 +43,16 @@ void bsp_init(void)
     bsp_lcd_init();  
     vTaskDelay(pdMS_TO_TICKS(100));
     ESP_LOGI("BSP", "LCD initialized");
-    // bsp_camera_init();
+    bsp_camera_init();
     vTaskDelay(pdMS_TO_TICKS(100));
     bsp_touch_init();
     vTaskDelay(pdMS_TO_TICKS(100));
-    // bsp_fp_init();
-    // vTaskDelay(pdMS_TO_TICKS(100));
-
-    // bsp_microsd_init();
+    bsp_fp_init();
     vTaskDelay(pdMS_TO_TICKS(100));
+
+    bsp_microsd_init();
+    vTaskDelay(pdMS_TO_TICKS(100));
+    bsp_servo_init();
     
 
 }

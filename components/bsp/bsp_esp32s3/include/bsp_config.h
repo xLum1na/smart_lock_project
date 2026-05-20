@@ -24,7 +24,7 @@ extern "C" {
 /* SPI 总线配置定义 */
 #define BSP_SPI_HOST            SPI2_HOST           ///< SPI2
 #define BSP_SPI_DMA_CHAN        SPI_DMA_CH_AUTO     ///< 自动选择通道
-#define BSP_SPI_TRAN_MAX_SIZE   4096                ///< 最大传输字节数
+#define BSP_SPI_TRAN_MAX_SIZE   (480 * 320 * 3)     /* 460800, 容纳全屏 RGB666 */
 #define BSP_SPI_MOSI_PIN        38
 #define BSP_SPI_MISO_PIN        39
 #define BSP_SPI_SCLK_PIN        40
@@ -90,7 +90,7 @@ extern "C" {
 
 
 
-#define BSP_CAMERA_XCLK_FREQ_HZ     10000000
+#define BSP_CAMERA_XCLK_FREQ_HZ     20000000  /* 20MHz, OV2640 安全范围 */
 #define BSP_CAMERA_LEDC_TIMER       LEDC_TIMER_1
 #define BSP_CAMERA_LEDC_CHANNEL     LEDC_CHANNEL_0
 
@@ -108,6 +108,14 @@ extern "C" {
  */
 #define BSP_SD_CS_PIN       45
 
+/**
+ * @brief 舵机配置定义
+ */
+#define BSP_SERVO_LEDC_PIIN       48
+#define BSP_SERVO_LEDC_TIMER    LEDC_TIMER_2
+#define BSP_SERVO_LEDC_CHANNEL  LEDC_CHANNEL_0
+#define BSP_SERVO_MIN_PW_US     500
+#define BSP_SERVO_MAX_PW_US     2500
 
 #ifdef __cplusplus
 }

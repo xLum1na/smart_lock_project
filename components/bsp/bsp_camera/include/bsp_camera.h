@@ -32,6 +32,7 @@ uint8_t bsp_camera_init(void);
  */
 uint8_t bsp_camera_deinit(void);
 
+
 #ifdef __cplusplus
 }
 #endif

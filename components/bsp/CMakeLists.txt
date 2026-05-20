@@ -8,7 +8,7 @@ file(GLOB BSP_TOUCH_SRCS "bsp_touch/*.c")
 file(GLOB BSP_CAMERA_SRCS "bsp_camera/*.c")
 file(GLOB BSP_FP_SRCS "bsp_fp/*.c")
 file(GLOB BSP_MICROSD_SRCS "bsp_microsd/*.c")
-file(GLOB BSP_SERVO_SRCS "bsp_microsd/*.c")
+file(GLOB BSP_SERVO_SRCS "bsp_servo/*.c")
 idf_component_register(
     SRCS
         ${BSP_BSPP4_SRCS}
